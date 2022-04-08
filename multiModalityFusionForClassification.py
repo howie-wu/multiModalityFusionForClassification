@@ -1,7 +1,4 @@
 '''
-2020-09-24
-作者：吴愚
-研究目标：
 用于学习多模态目标识别网络
 -----------------------------------------------------------
 -首先从多分类开始做起（多分类网络）：                            -
@@ -16,31 +13,35 @@ import torch.nn as nn
 from torch import optim
 from torch.autograd import Variable
 from torch.utils.data import DataLoader
-from torchvision import transforms
-from torchvision import datasets
 from tqdm import tqdm
 from torch.optim import lr_scheduler
+from torchvision import datasets, models, transforms
 
 '''定义超参数'''
 batch_size = 64  # 批的大小
-learning_rate = 1e-2  # 学习率
+learning_rate = 1e-3  # 学习率
 num_epoches = 200  # 遍历训练集的次数
 
-'''
+IMG_MEAN = [0.485, 0.456, 0.406]
+IMG_STD = [0.229, 0.224, 0.225]
+IMG_SIZE = 224
 transform = transforms.Compose([
-    transforms.RandomSizedCrop(224),
+    transforms.Resize(IMG_SIZE),
+    transforms.RandomResizedCrop(IMG_SIZE),
     transforms.RandomHorizontalFlip(),
+    transforms.RandomRotation(30),
     transforms.ToTensor(),
-    transforms.Normalize(mean = [ 0.485, 0.456, 0.406 ],
-                         std  = [ 0.229, 0.224, 0.225 ]),
-    ])
-'''
+    transforms.Normalize(IMG_MEAN, IMG_STD)
+])
+
 
 '''下载训练集 CIFAR-10 10分类训练集'''
 train_dataset = datasets.CIFAR10('./data', train=True, transform=transforms.ToTensor(), download=True)
 train_loader = DataLoader(train_dataset, batch_size=64, shuffle=True)
 test_dataset = datasets.CIFAR10('./data', train=False, transform=transforms.ToTensor(), download=True)
 test_loader = DataLoader(test_dataset, batch_size=32, shuffle=False)
+
+use_gpu = torch.cuda.is_available()  # 判断是否有GPU加速
 
 class fusion(nn.Module):
     def __init__(self, num_classes=10):
@@ -149,13 +150,9 @@ class fusion(nn.Module):
         return out
 
 
-'''创建model实例对象，并检测是否支持使用GPU'''
-model = fusion()
+DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+model = fusion().to(DEVICE)
 
-
-use_gpu = torch.cuda.is_available()  # 判断是否有GPU加速
-if use_gpu:
-    model = model.cuda()
 
 '''定义loss和optimizer'''
 criterion = nn.CrossEntropyLoss()
@@ -186,6 +183,8 @@ for epoch in range(num_epoches):
         # 向后传播
         optimizer.zero_grad()
         loss.backward()
+        optimizer.step()
+        torch.autograd.set_detect_anomaly(True)
 
     print('Finish {} epoch, Loss: {:.6f}, Acc: {:.6f}'.format(
         epoch + 1, running_loss / (len(train_dataset)), running_acc / (len(train_dataset))))
